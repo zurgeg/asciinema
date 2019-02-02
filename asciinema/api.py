@@ -77,9 +77,6 @@ class Api:
         error = errors.get(status)
 
         if not error:
-            if status >= 500:
-                error = "The server is having temporary problems. Try again in a minute."
-            else:
-                error = "HTTP status: %i" % status
+            error = "Error: %i - %s" % (status, body)
 
         raise APIError(error)
