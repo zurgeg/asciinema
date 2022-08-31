@@ -1,5 +1,5 @@
 import array
-import fcntl
+#import fcntl
 import os
 import pty
 import select
@@ -38,9 +38,12 @@ def record(
     pause_key = key_bindings.get("pause")
 
     def set_pty_size() -> None:
+        pass
+        '''
         cols, rows = get_tty_size()
         buf = array.array("h", [rows, cols, 0, 0])
         fcntl.ioctl(pty_fd, termios.TIOCSWINSZ, buf)
+        '''
 
     def handle_master_read(data: Any) -> None:
         os.write(tty_stdout_fd, data)
@@ -150,7 +153,22 @@ def record(
 
     os.waitpid(pid, 0)
 
+def pipe_no_wait(pipefd):
+  # https://stackoverflow.com/questions/34504970/non-blocking-read-on-os-pipe-on-windows
+  """ pipefd is a integer as returned by os.pipe """
 
+  SetNamedPipeHandleState = windll.kernel32.SetNamedPipeHandleState
+  SetNamedPipeHandleState.argtypes = [HANDLE, LPDWORD, LPDWORD, LPDWORD]
+  SetNamedPipeHandleState.restype = BOOL
+
+  h = msvcrt.get_osfhandle(pipefd)
+
+  res = windll.kernel32.SetNamedPipeHandleState(h, byref(PIPE_NOWAIT), None, None)
+  if res == 0:
+      print(WinError())
+      return False
+  return True
+    
 class SignalFD:
     def __init__(self, signals: List[signal.Signals]) -> None:
         self.signals = signals
@@ -159,8 +177,7 @@ class SignalFD:
 
     def __enter__(self) -> int:
         r, w = os.pipe()
-        flags = fcntl.fcntl(w, fcntl.F_GETFL, 0) | os.O_NONBLOCK
-        fcntl.fcntl(w, fcntl.F_SETFL, flags)
+        pipe_no_wait(r)
         self.orig_wakeup_fd = signal.set_wakeup_fd(w)
 
         for sig, handler in self._noop_handlers(self.signals):
